@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { generateImage } from "./_core/imageGeneration";
 import { storagePut } from "./storage";
+import { transcribeAudio } from "./_core/voiceTranscription";
 import { nanoid } from "nanoid";
 
 // ─── Settings helpers ──────────────────────────────────────────────────────
@@ -223,10 +224,50 @@ export const appRouter = router({
         const buffer = Buffer.from(input.base64, "base64");
         const key = `chat-images/${input.sessionId}/${nanoid(8)}.jpg`;
         const { url } = await storagePut(key, buffer, input.mimeType);
-        return { url };
+                return { url };
+      }),
+
+    transcribeAudio: publicProcedure
+      .input(
+        z.object({
+          base64: z.string(),
+          mimeType: z.string().default("audio/webm"),
+          language: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // Upload audio to storage first so transcribeAudio can fetch it by URL
+        const buffer = Buffer.from(input.base64, "base64");
+        const ext = input.mimeType.includes("webm")
+          ? "webm"
+          : input.mimeType.includes("mp4") || input.mimeType.includes("m4a")
+          ? "m4a"
+          : input.mimeType.includes("wav")
+          ? "wav"
+          : "webm";
+        const key = `voice-uploads/${nanoid(12)}.${ext}`;
+        const { url } = await storagePut(key, buffer, input.mimeType);
+
+        // Build a full absolute URL for the transcription service.
+        // The /manus-storage/ path is served by our own Express proxy which
+        // redirects to a signed S3 URL — so we point Whisper at our own server.
+        const appOrigin = process.env.APP_ORIGIN ||
+          `http://localhost:${process.env.PORT || 3000}`;
+        const audioUrl = url.startsWith("http") ? url : `${appOrigin}${url}`;
+
+        const result = await transcribeAudio({
+          audioUrl,
+          language: input.language,
+          prompt: "Transcribe the user's voice message accurately",
+        });
+
+        if ("error" in result) {
+          throw new Error(result.error);
+        }
+
+        return { text: result.text, language: result.language };
       }),
   }),
-
   // ── AI Generation ─────────────────────────────────────────────────────
   ai: router({
     generateImage: publicProcedure

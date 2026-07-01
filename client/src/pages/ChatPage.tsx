@@ -21,6 +21,8 @@ type Message = {
   streaming?: boolean;
 };
 
+type RecordingState = "idle" | "recording" | "transcribing";
+
 export default function ChatPage() {
   const [sessionId] = useState(() => nanoid(16));
   const [messages, setMessages] = useState<Message[]>([]);
@@ -33,17 +35,33 @@ export default function ChatPage() {
     preview: string;
   } | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [recordingState, setRecordingState] = useState<RecordingState>("idle");
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const uploadImageMutation = trpc.chat.uploadImage.useMutation();
+  const transcribeAudioMutation = trpc.chat.transcribeAudio.useMutation();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Cleanup recording timer on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   const handleImageUpload = async (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -82,6 +100,147 @@ export default function ChatPage() {
     }
   };
 
+  // ── Voice recording ──────────────────────────────────────────────────────
+  const startRecording = async () => {
+    if (recordingState !== "idle") return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Pick the best supported MIME type
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "audio/webm";
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks to release the mic
+        stream.getTracks().forEach((t) => t.stop());
+
+        const baseMime = mimeType.split(";")[0];
+        const audioBlob = new Blob(audioChunksRef.current, { type: baseMime });
+
+        if (audioBlob.size < 1000) {
+          toast.error("Recording too short — please try again.");
+          setRecordingState("idle");
+          setRecordingSeconds(0);
+          return;
+        }
+
+        if (audioBlob.size > 16 * 1024 * 1024) {
+          toast.error("Recording too long (max ~10 min). Please try again.");
+          setRecordingState("idle");
+          setRecordingSeconds(0);
+          return;
+        }
+
+        setRecordingState("transcribing");
+
+        try {
+          // Convert blob to base64
+          const arrayBuffer = await audioBlob.arrayBuffer();
+          const uint8 = new Uint8Array(arrayBuffer);
+          const base64 = btoa(
+            Array.from(uint8, (b) => String.fromCharCode(b)).join("")
+          );
+
+          const result = await transcribeAudioMutation.mutateAsync({
+            base64,
+            mimeType: baseMime,
+          });
+
+          if (result.text?.trim()) {
+            setInput((prev) =>
+              prev ? `${prev} ${result.text.trim()}` : result.text.trim()
+            );
+            toast.success("Voice transcribed — review and send!");
+            // Focus the textarea so user can edit/send
+            setTimeout(() => textareaRef.current?.focus(), 50);
+          } else {
+            toast.error("No speech detected. Please try again.");
+          }
+        } catch (err) {
+          console.error("Transcription error:", err);
+          toast.error("Transcription failed. Please try again.");
+        } finally {
+          setRecordingState("idle");
+          setRecordingSeconds(0);
+        }
+      };
+
+      mediaRecorder.start(250); // collect data every 250ms
+      setRecordingState("recording");
+      setRecordingSeconds(0);
+
+      // Timer to show recording duration
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((s) => {
+          // Auto-stop at 5 minutes
+          if (s >= 299) {
+            stopRecording();
+            return s;
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch (err: unknown) {
+      const error = err as Error;
+      if (
+        error.name === "NotAllowedError" ||
+        error.name === "PermissionDeniedError"
+      ) {
+        toast.error(
+          "Microphone access denied. Please allow mic access in your browser settings."
+        );
+      } else if (error.name === "NotFoundError") {
+        toast.error("No microphone found. Please connect a microphone.");
+      } else {
+        toast.error("Could not start recording. Please try again.");
+      }
+      setRecordingState("idle");
+    }
+  };
+
+  const stopRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state === "recording"
+    ) {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const handleMicClick = () => {
+    if (recordingState === "recording") {
+      stopRecording();
+    } else if (recordingState === "idle") {
+      startRecording();
+    }
+    // "transcribing" state: do nothing, wait for it to finish
+  };
+
+  const formatRecordingTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  // ── Send message ─────────────────────────────────────────────────────────
   const sendMessage = useCallback(async () => {
     const text = input.trim();
     if (!text || isStreaming) return;
@@ -156,7 +315,7 @@ export default function ChatPage() {
               );
             }
           } catch {
-            // skip
+            // skip malformed SSE lines
           }
         }
       }
@@ -201,6 +360,10 @@ export default function ChatPage() {
     setMessages([]);
     setUploadedImage(null);
   };
+
+  // Mic button appearance
+  const micIsRecording = recordingState === "recording";
+  const micIsTranscribing = recordingState === "transcribing";
 
   return (
     <AppLayout>
@@ -306,7 +469,8 @@ export default function ChatPage() {
                   color: "oklch(0.4 0 0)",
                 }}
               >
-                No restrictions. Upload images for analysis. Switch modes above.
+                No restrictions. Upload images for analysis. Use the mic to
+                speak. Switch modes above.
               </p>
             </div>
           )}
@@ -442,6 +606,90 @@ export default function ChatPage() {
             </div>
           )}
 
+          {/* Recording indicator banner */}
+          {micIsRecording && (
+            <div
+              className="fade-in"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                marginBottom: "0.5rem",
+                padding: "0.5rem 0.75rem",
+                background: "oklch(0.1 0.04 27)",
+                border: "2px solid oklch(0.55 0.22 27)",
+              }}
+            >
+              {/* Pulsing red dot */}
+              <span
+                className="pulse-red"
+                style={{
+                  display: "inline-block",
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  background: "oklch(0.55 0.22 27)",
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                className="brut-label"
+                style={{ color: "oklch(0.55 0.22 27)", fontSize: "0.7rem" }}
+              >
+                RECORDING — {formatRecordingTime(recordingSeconds)}
+              </span>
+              <span
+                style={{
+                  fontFamily: "Inter, sans-serif",
+                  fontSize: "0.78rem",
+                  color: "oklch(0.5 0 0)",
+                  flex: 1,
+                }}
+              >
+                Speak clearly — click the mic again to stop
+              </span>
+              <button
+                onClick={stopRecording}
+                className="brut-btn brut-btn-red"
+                style={{ fontSize: "0.7rem", padding: "0.2rem 0.6rem" }}
+              >
+                STOP
+              </button>
+            </div>
+          )}
+
+          {micIsTranscribing && (
+            <div
+              className="fade-in"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                marginBottom: "0.5rem",
+                padding: "0.5rem 0.75rem",
+                background: "oklch(0.08 0 0)",
+                border: "1px solid oklch(0.25 0 0)",
+              }}
+            >
+              <span
+                className="spin brut-heading"
+                style={{
+                  display: "inline-block",
+                  color: "oklch(0.55 0.22 27)",
+                  fontSize: "1rem",
+                }}
+              >
+                ⟳
+              </span>
+              <span
+                className="brut-label"
+                style={{ color: "oklch(0.5 0 0)", fontSize: "0.7rem" }}
+              >
+                TRANSCRIBING AUDIO...
+              </span>
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
             {/* Image upload button */}
             <button
@@ -477,6 +725,43 @@ export default function ChatPage() {
               }}
             />
 
+            {/* Microphone button */}
+            <button
+              onClick={handleMicClick}
+              disabled={micIsTranscribing || isStreaming}
+              className={`brut-btn ${micIsRecording ? "brut-btn-red" : ""}`}
+              style={{
+                padding: "0.65rem 0.75rem",
+                fontSize: "1.1rem",
+                flexShrink: 0,
+                alignSelf: "flex-end",
+                position: "relative",
+                opacity: micIsTranscribing || isStreaming ? 0.5 : 1,
+                // Pulsing border when recording
+                border: micIsRecording
+                  ? "2px solid oklch(0.55 0.22 27)"
+                  : undefined,
+                animation: micIsRecording ? "pulse-border 1s ease-in-out infinite" : undefined,
+              }}
+              title={
+                micIsRecording
+                  ? "Stop recording"
+                  : micIsTranscribing
+                  ? "Transcribing..."
+                  : "Start voice input"
+              }
+            >
+              {micIsTranscribing ? (
+                <span className="spin" style={{ display: "inline-block" }}>
+                  ⟳
+                </span>
+              ) : micIsRecording ? (
+                "⏹"
+              ) : (
+                "🎤"
+              )}
+            </button>
+
             {/* Text input */}
             <textarea
               ref={textareaRef}
@@ -484,14 +769,18 @@ export default function ChatPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
-                friendMode
+                micIsRecording
+                  ? "🎤 Recording... click ⏹ to stop"
+                  : micIsTranscribing
+                  ? "Transcribing your voice..."
+                  : friendMode
                   ? "Hey! What's on your mind? 👋"
                   : "Ask anything — no restrictions..."
               }
               className="brut-textarea"
               rows={2}
               style={{ flex: 1, maxHeight: 120 }}
-              disabled={isStreaming}
+              disabled={isStreaming || micIsRecording || micIsTranscribing}
             />
 
             {/* Send / Stop */}
@@ -510,13 +799,16 @@ export default function ChatPage() {
             ) : (
               <button
                 onClick={sendMessage}
-                disabled={!input.trim()}
+                disabled={!input.trim() || micIsRecording || micIsTranscribing}
                 className="brut-btn brut-btn-filled"
                 style={{
                   padding: "0.65rem 1.2rem",
                   alignSelf: "flex-end",
                   flexShrink: 0,
-                  opacity: !input.trim() ? 0.4 : 1,
+                  opacity:
+                    !input.trim() || micIsRecording || micIsTranscribing
+                      ? 0.4
+                      : 1,
                 }}
               >
                 SEND
@@ -535,7 +827,7 @@ export default function ChatPage() {
               className="brut-label"
               style={{ color: "oklch(0.3 0 0)", fontSize: "0.6rem" }}
             >
-              ENTER TO SEND · SHIFT+ENTER FOR NEW LINE
+              ENTER TO SEND · SHIFT+ENTER FOR NEW LINE · 🎤 MIC FOR VOICE
             </span>
             <span
               className="brut-label"

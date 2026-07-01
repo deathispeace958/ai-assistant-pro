@@ -47,3 +47,13 @@
 - [x] Loading states and error handling throughout
 - [x] Mobile responsive layout
 - [x] Final checkpoint
+
+## Voice Input Feature
+- [x] Server: tRPC mutation for audio transcription using Whisper API
+- [x] Server: multipart audio upload endpoint
+- [x] Client: Microphone button in chat input bar (record/stop toggle)
+- [x] Client: MediaRecorder API for in-browser audio capture
+- [x] Client: Upload audio blob to server and get transcription back
+- [x] Client: Auto-fill transcribed text into chat input field
+- [x] Client: Visual recording indicator (pulsing red dot)
+- [x] Client: Error handling for mic permission denied
