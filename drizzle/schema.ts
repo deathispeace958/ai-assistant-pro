@@ -49,3 +49,27 @@ export const chatMessages = mysqlTable("chat_messages", {
 });
 
 export type ChatMessage = typeof chatMessages.$inferSelect;
+
+// Flagged requests (CSAM attempts, policy violations)
+export const flaggedRequests = mysqlTable("flagged_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  type: mysqlEnum("type", ["chat", "image_generation", "video_generation", "animation"]).notNull(),
+  content: text("content").notNull(),
+  reason: text("reason").notNull(),
+  blocked: boolean("blocked").default(true),
+  metadata: json("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type FlaggedRequest = typeof flaggedRequests.$inferSelect;
+
+// Blocked animations (minor detection)
+export const blockedAnimations = mysqlTable("blocked_animations", {
+  id: int("id").autoincrement().primaryKey(),
+  imageUrl: text("imageUrl").notNull(),
+  reason: text("reason").notNull(),
+  analysisResult: json("analysisResult"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type BlockedAnimation = typeof blockedAnimations.$inferSelect;

@@ -49,6 +49,14 @@ export default function SettingsPage() {
   const verifyMutation = trpc.settings.verifyPasscode.useMutation();
   const updatePasscodeMutation = trpc.settings.updatePasscode.useMutation();
   const updateRestrictionsMutation = trpc.settings.updateRestrictions.useMutation();
+  const flaggedRequestsQuery = trpc.moderation.getFlaggedRequests.useQuery(
+    { limit: 50, offset: 0 },
+    { enabled: panel === "unlocked" }
+  );
+  const blockedAnimationsQuery = trpc.moderation.getBlockedAnimations.useQuery(
+    { limit: 50, offset: 0 },
+    { enabled: panel === "unlocked" }
+  );
 
   // Load current settings when unlocked
   const handleUnlock = async () => {
@@ -619,6 +627,139 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </section>
+
+            <div className="brut-divider-thin" />
+
+            {/* Moderation Dashboard */}
+            <section>
+              <h2
+                className="brut-heading"
+                style={{ fontSize: "2rem", marginBottom: "0.75rem" }}
+              >
+                CONTENT MODERATION
+              </h2>
+              <div className="brut-divider-thin" style={{ marginBottom: "1rem" }} />
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h3
+                  className="brut-label"
+                  style={{
+                    fontSize: "0.9rem",
+                    marginBottom: "0.75rem",
+                    color: "oklch(0.55 0.22 27)",
+                  }}
+                >
+                  FLAGGED REQUESTS (CSAM & POLICY VIOLATIONS)
+                </h3>
+                {flaggedRequestsQuery.isLoading ? (
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: "0.85rem", color: "oklch(0.5 0 0)" }}>Loading...</div>
+                ) : flaggedRequestsQuery.data?.items && flaggedRequestsQuery.data.items.length > 0 ? (
+                  <div
+                    style={{
+                      maxHeight: "300px",
+                      overflowY: "auto",
+                      border: "1px solid oklch(0.15 0 0)",
+                      background: "oklch(0.07 0 0)",
+                    }}
+                  >
+                    {flaggedRequestsQuery.data.items.map((req: any) => (
+                      <div
+                        key={req.id}
+                        style={{
+                          padding: "0.75rem",
+                          borderBottom: "1px solid oklch(0.12 0 0)",
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        <div style={{ color: "oklch(0.55 0.22 27)", fontWeight: 600, marginBottom: "0.25rem" }}>
+                          {req.type.toUpperCase()}
+                        </div>
+                        <div style={{ color: "oklch(0.5 0 0)", marginBottom: "0.25rem" }}>
+                          {req.reason}
+                        </div>
+                        <div style={{ color: "oklch(0.4 0 0)", fontSize: "0.75rem" }}>
+                          {new Date(req.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: "0.85rem",
+                      color: "oklch(0.5 0 0)",
+                      padding: "1rem",
+                      background: "oklch(0.07 0 0)",
+                      border: "1px solid oklch(0.15 0 0)",
+                    }}
+                  >
+                    No flagged requests. System is clean.
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3
+                  className="brut-label"
+                  style={{
+                    fontSize: "0.9rem",
+                    marginBottom: "0.75rem",
+                    color: "oklch(0.55 0.22 27)",
+                  }}
+                >
+                  BLOCKED ANIMATIONS (MINOR DETECTION)
+                </h3>
+                {blockedAnimationsQuery.isLoading ? (
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: "0.85rem", color: "oklch(0.5 0 0)" }}>Loading...</div>
+                ) : blockedAnimationsQuery.data?.items && blockedAnimationsQuery.data.items.length > 0 ? (
+                  <div
+                    style={{
+                      maxHeight: "300px",
+                      overflowY: "auto",
+                      border: "1px solid oklch(0.15 0 0)",
+                      background: "oklch(0.07 0 0)",
+                    }}
+                  >
+                    {blockedAnimationsQuery.data.items.map((anim: any) => (
+                      <div
+                        key={anim.id}
+                        style={{
+                          padding: "0.75rem",
+                          borderBottom: "1px solid oklch(0.12 0 0)",
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        <div style={{ color: "oklch(0.55 0.22 27)", fontWeight: 600, marginBottom: "0.25rem" }}>
+                          ANIMATION BLOCKED
+                        </div>
+                        <div style={{ color: "oklch(0.5 0 0)", marginBottom: "0.25rem" }}>
+                          {anim.reason}
+                        </div>
+                        <div style={{ color: "oklch(0.4 0 0)", fontSize: "0.75rem" }}>
+                          {new Date(anim.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: "0.85rem",
+                      color: "oklch(0.5 0 0)",
+                      padding: "1rem",
+                      background: "oklch(0.07 0 0)",
+                      border: "1px solid oklch(0.15 0 0)",
+                    }}
+                  >
+                    No blocked animations. All uploads passed safety checks.
+                  </div>
+                )}
               </div>
             </section>
 

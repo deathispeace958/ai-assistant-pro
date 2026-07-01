@@ -77,3 +77,15 @@
 - [x] Block photo animation if image appears to contain minors (uses LLM vision to analyze uploaded image)
 - [x] Add comprehensive CSAM detection module with keyword/phrase matching
 - [x] Add unit tests for CSAM content filtering (17 tests passing)
+
+## Content Moderation Dashboard
+- [x] Database table: flagged_requests (timestamp, type, content, reason, blocked)
+- [x] Database table: blocked_animations (timestamp, imageUrl, reason, analysis_result)
+- [x] tRPC router: moderation.getFlaggedRequests (paginated, filterable)
+- [x] tRPC router: moderation.getBlockedAnimations (paginated)
+- [x] Client: Moderation section in Settings page
+- [x] UI: List of flagged CSAM requests with details
+- [x] UI: List of blocked animations with reason
+- [x] UI: Scrollable lists with timestamps
+- [x] Wire logging: log CSAM attempts to flagged_requests table (chat, image, video)
+- [x] Wire logging: log blocked animations to blocked_animations table (minor detection)

@@ -4,7 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { getDb } from "./db";
-import { appSettings, chatMessages, chatSessions } from "../drizzle/schema";
+import { appSettings, chatMessages, chatSessions, flaggedRequests, blockedAnimations } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 import { generateImage } from "./_core/imageGeneration";
@@ -287,7 +287,25 @@ export const appRouter = router({
       )
       .mutation(async ({ input }) => {
         // Validate prompt for CSAM content
-        validateImagePrompt(input.prompt);
+        try {
+          validateImagePrompt(input.prompt);
+        } catch (error) {
+          // Log the flagged request
+          const db = await getDb();
+          if (db) {
+            try {
+              await db.insert(flaggedRequests).values({
+                type: "image_generation",
+                content: input.prompt.substring(0, 500),
+                reason: error instanceof Error ? error.message : "CSAM content detected",
+                blocked: true,
+              });
+            } catch (logError) {
+              console.error("[Moderation] Failed to log flagged request:", logError);
+            }
+          }
+          throw error;
+        }
 
         const { url } = await generateImage({
           prompt: input.prompt,
@@ -313,6 +331,19 @@ export const appRouter = router({
         // Analyze image to detect if it contains minors
         const isSafe = await isImageSafeForAnimation(input.imageUrl);
         if (!isSafe) {
+          // Log the blocked animation
+          const db = await getDb();
+          if (db) {
+            try {
+              await db.insert(blockedAnimations).values({
+                imageUrl: input.imageUrl,
+                reason: "Minor detected in image - animation blocked for child safety",
+                analysisResult: { blocked: true, reason: "minor_detected" } as any,
+              });
+            } catch (logError) {
+              console.error("[Moderation] Failed to log blocked animation:", logError);
+            }
+          }
           throw new Error(
             "This image cannot be animated. Our system detected it may contain minors, and we cannot animate images of minors for child safety compliance."
           );
@@ -350,7 +381,25 @@ export const appRouter = router({
       )
       .mutation(async ({ input }) => {
         // Validate prompt for CSAM content
-        validateVideoPrompt(input.prompt);
+        try {
+          validateVideoPrompt(input.prompt);
+        } catch (error) {
+          // Log the flagged request
+          const db = await getDb();
+          if (db) {
+            try {
+              await db.insert(flaggedRequests).values({
+                type: "video_generation",
+                content: input.prompt.substring(0, 500),
+                reason: error instanceof Error ? error.message : "CSAM content detected",
+                blocked: true,
+              });
+            } catch (logError) {
+              console.error("[Moderation] Failed to log flagged request:", logError);
+            }
+          }
+          throw error;
+        }
 
         // Video generation: use image generation to create a representative frame
         // and provide a clear explanation that full video generation is being processed
@@ -366,6 +415,98 @@ export const appRouter = router({
         };
       }),
     }),
+
+  // Moderation (owner-only)
+  moderation: router({
+    getFlaggedRequests: publicProcedure
+      .input(
+        z.object({
+          limit: z.number().default(50),
+          offset: z.number().default(0),
+          type: z.enum(["chat", "image_generation", "video_generation", "animation"]).optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { items: [], total: 0 };
+
+        const items = input.type
+          ? await db
+              .select()
+              .from(flaggedRequests)
+              .where(eq(flaggedRequests.type, input.type))
+              .limit(input.limit)
+              .offset(input.offset)
+          : await db
+              .select()
+              .from(flaggedRequests)
+              .limit(input.limit)
+              .offset(input.offset);
+        return { items, total: items.length };
+      }),
+
+    getBlockedAnimations: publicProcedure
+      .input(
+        z.object({
+          limit: z.number().default(50),
+          offset: z.number().default(0),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { items: [], total: 0 };
+
+        const items = await db
+          .select()
+          .from(blockedAnimations)
+          .limit(input.limit)
+          .offset(input.offset);
+        return { items, total: items.length };
+      }),
+
+    logFlaggedRequest: publicProcedure
+      .input(
+        z.object({
+          type: z.enum(["chat", "image_generation", "video_generation", "animation"]),
+          content: z.string(),
+          reason: z.string(),
+          metadata: z.any().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { success: false };
+
+        await db.insert(flaggedRequests).values({
+          type: input.type,
+          content: input.content,
+          reason: input.reason,
+          metadata: input.metadata as any,
+          blocked: true,
+        });
+        return { success: true };
+      }),
+
+    logBlockedAnimation: publicProcedure
+      .input(
+        z.object({
+          imageUrl: z.string(),
+          reason: z.string(),
+          analysisResult: z.any().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { success: false };
+
+        await db.insert(blockedAnimations).values({
+          imageUrl: input.imageUrl,
+          reason: input.reason,
+          analysisResult: input.analysisResult as any,
+        });
+        return { success: true };
+      }),
+  }),
 });
 
 // ─── Streaming chat endpoint (registered separately in index.ts) ───────────
@@ -392,6 +533,21 @@ export async function handleChatStream(
     try {
       validateUserRequest(message);
     } catch (error) {
+      // Log the flagged request
+      const db = await getDb();
+      if (db) {
+        try {
+          await db.insert(flaggedRequests).values({
+            type: "chat",
+            content: message.substring(0, 500),
+            reason: error instanceof Error ? error.message : "CSAM content detected",
+            blocked: true,
+            metadata: { sessionId } as any,
+          });
+        } catch (logError) {
+          console.error("[Moderation] Failed to log flagged request:", logError);
+        }
+      }
       res.status(400).json({
         error:
           error instanceof Error
