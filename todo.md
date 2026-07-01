@@ -61,3 +61,10 @@
 ## Content Policy Clarification
 - [x] Update Settings panel to clarify explicit and sexual content is allowed by default
 - [x] Update NO RESTRICTIONS preset description to mention explicit/sexual content
+
+## Age Verification Feature
+- [x] Create AgeVerificationModal component with 18+ confirmation
+- [x] Store age verification in localStorage with timestamp
+- [x] Show modal on first visit only (check localStorage flag)
+- [x] Block app access until user confirms they are 18+
+- [x] Add reset button in Settings for testing

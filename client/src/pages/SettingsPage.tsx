@@ -621,6 +621,44 @@ export default function SettingsPage() {
                 ))}
               </div>
             </section>
+
+            <div className="brut-divider-thin" />
+
+            {/* Age Verification Reset */}
+            <section>
+              <h2
+                className="brut-heading"
+                style={{ fontSize: "2rem", marginBottom: "0.75rem" }}
+              >
+                AGE VERIFICATION
+              </h2>
+              <div className="brut-divider-thin" style={{ marginBottom: "1rem" }} />
+
+              <p
+                style={{
+                  fontFamily: "Inter, sans-serif",
+                  fontSize: "0.85rem",
+                  color: "oklch(0.5 0 0)",
+                  marginBottom: "1rem",
+                }}
+              >
+                Reset the age verification modal for testing. Users will see it again on their next visit.
+              </p>
+
+              <button
+                onClick={() => {
+                  localStorage.removeItem("ageVerified");
+                  toast.success("Age verification reset. Modal will show on next visit.");
+                }}
+                className="brut-btn brut-btn-red"
+                style={{
+                  fontSize: "0.95rem",
+                  padding: "0.6rem 1.5rem",
+                }}
+              >
+                RESET AGE VERIFICATION
+              </button>
+            </section>
           </div>
         )}
       </div>
