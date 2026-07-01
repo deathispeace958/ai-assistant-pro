@@ -9,7 +9,7 @@ const RESTRICTION_PRESETS = [
   {
     id: "none",
     label: "NO RESTRICTIONS",
-    desc: "Full unrestricted access. AI can discuss any topic.",
+    desc: "Full unrestricted access. AI can discuss any topic, including explicit and sexual content. This is the default.",
     color: "oklch(0.55 0.22 27)",
   },
   {
@@ -302,8 +302,7 @@ export default function SettingsPage() {
                   marginBottom: "1rem",
                 }}
               >
-                Control what content the AI will discuss with regular users.
-                These settings apply immediately to all new conversations.
+                By default, the AI allows explicit and sexual content. Choose a restriction level below to limit what users can discuss. Changes apply immediately to all new conversations.
               </p>
 
               <div

@@ -57,3 +57,7 @@
 - [x] Client: Auto-fill transcribed text into chat input field
 - [x] Client: Visual recording indicator (pulsing red dot)
 - [x] Client: Error handling for mic permission denied
+
+## Content Policy Clarification
+- [x] Update Settings panel to clarify explicit and sexual content is allowed by default
+- [x] Update NO RESTRICTIONS preset description to mention explicit/sexual content
