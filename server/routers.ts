@@ -17,6 +17,7 @@ import {
   validateVideoPrompt,
   getCSAMProhibitionPrompt,
 } from "./_core/contentSafety";
+import { isImageSafeForAnimation } from "./_core/imageAnalysis";
 
 // ─── Settings helpers ──────────────────────────────────────────────────────
 async function getSetting(key: string): Promise<string | null> {
@@ -308,6 +309,15 @@ export const appRouter = router({
         if (input.prompt) {
           validateImagePrompt(input.prompt);
         }
+
+        // Analyze image to detect if it contains minors
+        const isSafe = await isImageSafeForAnimation(input.imageUrl);
+        if (!isSafe) {
+          throw new Error(
+            "This image cannot be animated. Our system detected it may contain minors, and we cannot animate images of minors for child safety compliance."
+          );
+        }
+
         const stylePrompts: Record<string, string> = {
           dance:
             "The person in this image is now dancing energetically with arms raised, captured mid-motion in a dynamic dance pose. Realistic, vibrant, full of energy. AI ANIMATION.",
