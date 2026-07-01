@@ -1,0 +1,49 @@
+# AI Assistant Pro — TODO
+
+## Phase 1: Schema & Server
+- [x] Database schema: settings table (passcode, restrictions, config)
+- [x] Database schema: chat_sessions and chat_messages tables
+- [x] tRPC router: chat (streaming AI chat with image support)
+- [x] tRPC router: ai.generateImage
+- [x] tRPC router: ai.animatePhoto
+- [x] tRPC router: ai.generateVideo
+- [x] tRPC router: settings (get/update passcode, restrictions)
+- [x] File upload endpoint for images
+
+## Phase 2: Brutalist UI Layout
+- [x] Global Brutalist CSS (black bg, white oversized condensed type, red divider)
+- [x] Google Fonts: Bebas Neue + Inter for body
+- [x] App layout with full-width red divider header
+- [x] Navigation tabs: Chat | Generate | Animate | Settings
+- [x] Dark theme throughout
+
+## Phase 3: AI Chat
+- [x] Streaming chat interface using SSE
+- [x] Photo upload in chat (image analysis)
+- [x] Friend Mode toggle button
+- [x] Speaking modes selector (Formal, Casual, Expert, Creative, Concise)
+- [x] System prompt builder based on mode + friend mode
+- [x] Markdown rendering in chat messages
+- [x] Chat history per session
+
+## Phase 4: AI Media Generation
+- [x] AI Image Generation page with text prompt input
+- [x] Generated image display + download
+- [x] Animate Photo page with upload + animation style selector
+- [x] Clear "AI ANIMATION" label on animate feature
+- [x] AI Video Generation page with text prompt
+- [x] Video display after generation
+
+## Phase 5: Owner Settings
+- [x] Passcode entry dialog (default: hackerx)
+- [x] Owner panel: change passcode
+- [x] Owner panel: toggle content restrictions for users
+- [x] Owner panel: restriction presets (Safe, Moderate, None)
+- [x] Persist settings in database
+
+## Phase 6: Polish & Tests
+- [x] Vitest tests for settings router
+- [x] Vitest tests for chat router
+- [x] Loading states and error handling throughout
+- [x] Mobile responsive layout
+- [x] Final checkpoint
