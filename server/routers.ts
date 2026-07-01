@@ -11,6 +11,12 @@ import { generateImage } from "./_core/imageGeneration";
 import { storagePut } from "./storage";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { nanoid } from "nanoid";
+import {
+  validateUserRequest,
+  validateImagePrompt,
+  validateVideoPrompt,
+  getCSAMProhibitionPrompt,
+} from "./_core/contentSafety";
 
 // ─── Settings helpers ──────────────────────────────────────────────────────
 async function getSetting(key: string): Promise<string | null> {
@@ -71,6 +77,7 @@ function buildSystemPrompt(opts: {
           : `You apply the following custom restrictions: ${restrictions}`;
 
   return [
+    getCSAMProhibitionPrompt(),
     "You are AI Assistant Pro — an extraordinarily capable, highly intelligent AI assistant.",
     modeText,
     friendText,
@@ -278,6 +285,9 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
+        // Validate prompt for CSAM content
+        validateImagePrompt(input.prompt);
+
         const { url } = await generateImage({
           prompt: input.prompt,
           quality: input.quality,
@@ -294,6 +304,10 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
+        // Validate custom prompt for CSAM content
+        if (input.prompt) {
+          validateImagePrompt(input.prompt);
+        }
         const stylePrompts: Record<string, string> = {
           dance:
             "The person in this image is now dancing energetically with arms raised, captured mid-motion in a dynamic dance pose. Realistic, vibrant, full of energy. AI ANIMATION.",
@@ -325,6 +339,9 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
+        // Validate prompt for CSAM content
+        validateVideoPrompt(input.prompt);
+
         // Video generation: use image generation to create a representative frame
         // and provide a clear explanation that full video generation is being processed
         const { url } = await generateImage({
@@ -358,6 +375,19 @@ export async function handleChatStream(
 
     if (!message || !sessionId) {
       res.status(400).json({ error: "message and sessionId are required" });
+      return;
+    }
+
+    // Validate content for CSAM
+    try {
+      validateUserRequest(message);
+    } catch (error) {
+      res.status(400).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Request violates content policy",
+      });
       return;
     }
 

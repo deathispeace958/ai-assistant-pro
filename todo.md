@@ -68,3 +68,12 @@
 - [x] Show modal on first visit only (check localStorage flag)
 - [x] Block app access until user confirms they are 18+
 - [x] Add reset button in Settings for testing
+
+## Child Safety - CSAM Prohibition
+- [x] Add system prompt to all LLM calls blocking CSAM generation/discussion
+- [x] Add request validation to reject prompts containing child exploitation keywords
+- [x] Block image generation if prompt contains child-related keywords
+- [x] Block video generation if prompt contains child-related keywords
+- [ ] Block photo animation if image appears to contain minors (requires vision API to analyze uploaded image)
+- [x] Add comprehensive CSAM detection module with keyword/phrase matching
+- [x] Add unit tests for CSAM content filtering (17 tests passing)
