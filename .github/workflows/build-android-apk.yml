@@ -27,16 +27,17 @@ jobs:
         run: pnpm install
       
       - name: Build web assets
-        run: pnpm exec vite build
-      
-      - name: Prepare dist folder
         run: |
-          rm -rf dist
-          mkdir -p dist
-          # Vite builds to dist/public by default, copy to dist root
-          if [ -d "dist/public" ]; then
-            cp -r dist/public/* dist/
-            rm -rf dist/public
+          # Build with explicit output directory
+          pnpm exec vite build --outDir dist
+      
+      - name: Verify dist folder
+        run: |
+          echo "Contents of dist:"
+          ls -la dist/
+          if [ ! -f "dist/index.html" ]; then
+            echo "ERROR: index.html not found in dist"
+            exit 1
           fi
       
       - name: Sync to Android
