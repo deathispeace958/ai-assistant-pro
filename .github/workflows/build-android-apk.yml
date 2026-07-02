@@ -33,7 +33,11 @@ jobs:
         run: |
           rm -rf dist
           mkdir -p dist
-          cp -r client/dist/* dist/
+          # Vite builds to dist/public by default, copy to dist root
+          if [ -d "dist/public" ]; then
+            cp -r dist/public/* dist/
+            rm -rf dist/public
+          fi
       
       - name: Sync to Android
         run: npx cap sync android
