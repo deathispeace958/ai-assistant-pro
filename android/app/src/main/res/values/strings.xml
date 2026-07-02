@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AI Assistant Pro</string>
+    <string name="title_activity_main">AI Assistant Pro</string>
+    <string name="package_name">com.aiassistantpro.app</string>
+    <string name="custom_url_scheme">com.aiassistantpro.app</string>
+</resources>
