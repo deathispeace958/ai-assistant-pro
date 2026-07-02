@@ -27,18 +27,24 @@ jobs:
         run: pnpm install
       
       - name: Build web assets
-        run: |
-          # Build with explicit output directory
-          pnpm exec vite build --outDir dist
+        run: pnpm exec vite build
       
-      - name: Verify dist folder
+      - name: Prepare dist for Capacitor
         run: |
+          echo "Vite builds to dist/public by default, moving to dist root..."
+          if [ -d "dist/public" ]; then
+            mv dist/public/* dist/
+            rmdir dist/public
+          fi
+          
           echo "Contents of dist:"
           ls -la dist/
+          
           if [ ! -f "dist/index.html" ]; then
             echo "ERROR: index.html not found in dist"
             exit 1
           fi
+          echo "OK: index.html found in dist"
       
       - name: Sync to Android
         run: npx cap sync android
